@@ -204,62 +204,128 @@ CREATE OR REPLACE TRIGGER VALIDA_CABALLO_ENTRENADOR
                 -- El entrenador no domina ninguna técnica
                 RAISE_APPLICATION_ERROR(-20000, 'El entrenador no domina ninguna técnica');
             END IF;
-            
         END IF;
     END;
 /
 
 
 -- reparte el premio de una carrera ganada en primer lugar
--- TRIGGER AFTER INSERT OR UPDATE ON ARRANQUE WHEN (:NEW.posicion_final = 1)
--- FOR EACH ROW
-
--- DECLARE
+-- CREATE OR REPLACE TRIGGER REPARTE_GANANCIAS
+--     BEFORE INSERT OR UPDATE ON ARRANQUE
+--         FOR EACH ROW
+--             WHEN (NEW.pos_final = 1)
     
-
--- BEGIN
---     SELECT 
--- END;
+--     DECLARE
+--         v_premio NUMBER;
+        
+--     BEGIN
+--         SELECT c.premio INTO v_premio FROM CARRERA c WHERE c.num_carrera = :NEW.carrera;
+        
+--         -- Agrega ganancias a dueño
+--         UPDATE DUENO d
+--         SET d.ganancias = (
+--             SELECT d.ganancias + v_premio * 0.8 * p.porcentaje
+--             FROM PROPIEDAD_DE p
+--             WHERE d.rfc = p.dueno 
+--                 AND p.caballo = :NEW.caballo
+--         )
+--         WHERE d.rfc IN (
+--             SELECT p.dueno
+--             FROM PROPIEDAD_DE p
+--             WHERE p.caballo = :NEW.caballo
+--         );
+        
+--         -- Agrega salario a entrenador
+--         UPDATE ENTRENADOR e
+--         SET e.salario = e.salario + v_premio * 0.1
+--         WHERE e.rfc IN (
+--             SELECT c.entrenador.rfc
+--             FROM CABALLO c
+--             WHERE c.reg = :NEW.caballo
+--         );
+        
+--         -- Agrega salario a jockey
+--         UPDATE JOCKEY j
+--         SET j.salario = j.salario + v_premio * 0.1
+--         WHERE REF(j) = :NEW.jockey;
+--     END;
 -- /
-    -- UPDATE SALARIO DE JOCKEY, UN INCREMENTO DEL 20% DEL PREMIO DEL ARRANQUE
-    -- UPDATE SALARIO DE ENTRENADOR, UN INCREMENTO DEL 10% DEL PREMIO DEL ARRANQUE
-    -- UPDATE DUENOS DE CABALLO, UN INCREMENTO DEL 80% DEL PREMIO A GANANCIAS
-    
+
 
 -- INSERTS
 -- ** Falta poblar bien la base de datos
-INSERT INTO DUENO VALUES('asd1', 'Dueno1', '11111', 'M', 'Dir', 1000);
+
+-- DUENO -> rfc, nombre, telefono, sexo, direccion, ganancias
+INSERT INTO DUENO VALUES('d1', 'Dueno1', '8110', 'M', 'Dir', 0);
+INSERT INTO DUENO VALUES('d2', 'Dueno2', '8111', 'F', 'Dir', 10);
 /
 
-INSERT INTO ENTRENADOR VALUES('qwe1', 'Entrenador1', '1111', 'F', 'Dir', 1, tecnicas_array(), 1000);
-INSERT INTO ENTRENADOR VALUES('qwe2', 'Entrenador2', '2222', 'M', 'Dir', 2, tecnicas_array('Carrera plana'), 2000);
-INSERT INTO ENTRENADOR VALUES('qwe3', 'Entrenador3', '3333', 'M', 'Dir', 1, tecnicas_array('Carrera de campo', 'Carrera de salto'), 2100);
+-- ENTRENADOR -> rfc, nombre, telefono, sexo, direccion, experiencia, tecnicas, salario
+INSERT INTO ENTRENADOR VALUES('e1', 'Entrenador1', '8112', 'F', 'Dir', 1, tecnicas_array(), 100);
+INSERT INTO ENTRENADOR VALUES('e2', 'Entrenador2', '8113', 'M', 'Dir', 2, tecnicas_array('Carrera plana'), 1000);
+INSERT INTO ENTRENADOR VALUES('e3', 'Entrenador3', '8114', 'M', 'Dir', 1, tecnicas_array('Carrera de campo', 'Carrera de salto'), 0);
 /
 
+-- JOCKEY -> rfc, nombre, telefono, sexo, direccion, estatura, peso, edad, salario
+INSERT INTO JOCKEY VALUES('j1', 'Jockey1', '8125', 'F', 'Dir', 1.72, 58.45, 33, 10);
+
+-- CABALLO -> reg, nombre, fecha_nac, genero, tipo, REF(entrenador)
 INSERT INTO CABALLO VALUES(111, 'Apache', NULL, 'M', 'Pura_Sangre', NULL);
 INSERT INTO CABALLO VALUES(112, 'Pinta', NULL, 'H', 'Appaloosa', NULL);
 INSERT INTO CABALLO VALUES(113, 'Cherokee', NULL, 'M', 'Quarter', NULL);
 INSERT INTO CABALLO VALUES(114, 'Moro', NULL, 'M', 'Árabe', NULL);
 /
 
-INSERT INTO CARRERA VALUES(1, 200, NULL, 'Carrera plana');
+-- CARRERA -> num_carrera, premio, fecha_carr, tipo
+INSERT INTO CARRERA VALUES(1, 100, NULL, 'Carrera plana');
 INSERT INTO CARRERA VALUES(2, 100, NULL, 'Carrera de campo');
-INSERT INTO CARRERA VALUES(3, 200, NULL, 'Carrera de tiro');
-INSERT INTO CARRERA VALUES(4, 200, NULL, 'Carrera de salto');
+INSERT INTO CARRERA VALUES(3, 100, NULL, 'Carrera de tiro');
+INSERT INTO CARRERA VALUES(4, 100, NULL, 'Carrera de salto');
 /
-
+-- ARRANQUE -> inicio, pos_final, color, carrera, caballo, REF(jockey)
 INSERT INTO ARRANQUE VALUES(1, 1, 'Azul', 1, 111, NULL);
 INSERT INTO ARRANQUE VALUES(1, 2, 'Verde', 2, 112, NULL);
 INSERT INTO ARRANQUE VALUES(3, 3, 'Negro', 3, 113, NULL);
 INSERT INTO ARRANQUE VALUES(5, 2, 'Café', 4, 114, NULL);
 /
 
+-- PROPIEDAD_DE -> caballo, dueno, porcentaje
+INSERT INTO PROPIEDAD_DE VALUES(111, 'd1', 1);
+INSERT INTO PROPIEDAD_DE VALUES(114, 'd1', 0.5);
+INSERT INTO PROPIEDAD_DE VALUES(114, 'd2', 0.5);
+
+
+UPDATE CABALLO
+SET entrenador = (
+    SELECT REF(e)
+    FROM ENTRENADOR e
+    WHERE e.rfc = 'e2'
+)
+WHERE reg = 111;
+/
+
+UPDATE CABALLO
+SET entrenador = (
+    SELECT REF(e)
+    FROM ENTRENADOR e
+    WHERE e.rfc = 'e3'
+)
+WHERE reg = 114;
+/
+
+--TEST trigger 3
+-- Ver resultados
+SELECT rfc, nombre, ganancias FROM DUENO;
+SELECT rfc, nombre, salario FROM ENTRENADOR;
+SELECT rfc, nombre, salario FROM JOCKEY;
+
+
 -- TEST trigger 2
 UPDATE CABALLO
 SET entrenador = (
     SELECT REF(e)
     FROM ENTRENADOR e
-    WHERE e.rfc = 'qwe1'
+    WHERE e.rfc = 'e1'
 )
 WHERE reg = 112;
 /
@@ -269,7 +335,7 @@ UPDATE CABALLO
 SET entrenador = (
     SELECT REF(e)
     FROM ENTRENADOR e
-    WHERE e.rfc = 'qwe2'
+    WHERE e.rfc = 'e2'
 )
 WHERE reg = 111;
 /
