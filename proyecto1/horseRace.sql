@@ -87,7 +87,7 @@ CREATE TABLE ARRANQUE (
 );
 /
 
-
+-- TRIGGER 1
 -- Trigger que valida que el tipo de caballo corresponde al tipo de carrera en la que participa -> testeado check
 CREATE OR REPLACE TRIGGER VALIDA_CABALLO_CARRERA
     BEFORE INSERT OR UPDATE ON ARRANQUE
@@ -123,6 +123,7 @@ END;
 /
 
 
+-- TRIGGER 2
 -- Trigger que valida que el corresponde a la técnica de entrenamiento que domina su entrenador
 CREATE OR REPLACE TRIGGER VALIDA_CABALLO_ENTRENADOR
     BEFORE INSERT OR UPDATE ON CABALLO 
@@ -208,52 +209,57 @@ CREATE OR REPLACE TRIGGER VALIDA_CABALLO_ENTRENADOR
     END;
 /
 
-
+-- TRIGGER 3
 -- reparte el premio de una carrera ganada en primer lugar
--- CREATE OR REPLACE TRIGGER REPARTE_GANANCIAS
---     BEFORE INSERT OR UPDATE ON ARRANQUE
---         FOR EACH ROW
---             WHEN (NEW.pos_final = 1)
-    
---     DECLARE
---         v_premio NUMBER;
+CREATE OR REPLACE TRIGGER REPARTE_GANANCIAS
+    AFTER INSERT OR UPDATE ON ARRANQUE
+    FOR EACH ROW
+        WHEN (NEW.pos_final = 1)
         
---     BEGIN
---         SELECT c.premio INTO v_premio FROM CARRERA c WHERE c.num_carrera = :NEW.carrera;
-        
---         -- Agrega ganancias a dueño
---         UPDATE DUENO d
---         SET d.ganancias = (
---             SELECT d.ganancias + v_premio * 0.8 * p.porcentaje
---             FROM PROPIEDAD_DE p
---             WHERE d.rfc = p.dueno 
---                 AND p.caballo = :NEW.caballo
---         )
---         WHERE d.rfc IN (
---             SELECT p.dueno
---             FROM PROPIEDAD_DE p
---             WHERE p.caballo = :NEW.caballo
---         );
-        
---         -- Agrega salario a entrenador
---         UPDATE ENTRENADOR e
---         SET e.salario = e.salario + v_premio * 0.1
---         WHERE e.rfc IN (
---             SELECT c.entrenador.rfc
---             FROM CABALLO c
---             WHERE c.reg = :NEW.caballo
---         );
-        
---         -- Agrega salario a jockey
---         UPDATE JOCKEY j
---         SET j.salario = j.salario + v_premio * 0.1
---         WHERE REF(j) = :NEW.jockey;
---     END;
--- /
+        DECLARE 
+            v_num_duenos NUMBER;
+            v_premio NUMBER;
+        BEGIN
+            -- saca num de dueños
+            SELECT COUNT(d.rfc) 
+            INTO v_num_duenos 
+            FROM DUENO d
+            WHERE d.rfc IN (
+                SELECT p.dueno
+                FROM PROPIEDAD_DE p
+                WHERE p.caballo = :NEW.caballo
+            );
+            
+            -- saca premio
+            SELECT c.premio INTO v_premio FROM CARRERA c WHERE c.num_carrera = :NEW.carrera; 
+            
+            -- Agrega ganancias a dueños
+            UPDATE DUENO d
+            SET d.ganancias = d.ganancias + v_premio * 0.8 / v_num_duenos
+            WHERE d.rfc in (
+                SELECT p.dueno
+                FROM PROPIEDAD_DE p
+                WHERE p.caballo = :NEW.caballo
+            );
+            
+            -- Agrega salario a entrenador
+            UPDATE ENTRENADOR e
+            SET e.salario = e.salario + v_premio * 0.1
+            WHERE e.rfc = (
+                SELECT c.entrenador.rfc
+                FROM CABALLO c
+                WHERE c.reg = :NEW.caballo
+            );
+            
+            -- Agrega ganancias a jinete
+            UPDATE JOCKEY j
+            SET j.salario = j.salario + v_premio * 0.1
+            WHERE REF(j) = :NEW.jockey;
+        END;
+/
 
 
 -- INSERTS
--- ** Falta poblar bien la base de datos
 
 -- DUENO -> rfc, nombre, telefono, sexo, direccion, ganancias
 INSERT INTO DUENO VALUES('d1', 'Dueno1', '8110', 'M', 'Dir', 0);
@@ -330,13 +336,6 @@ INSERT INTO CARRERA(
 INSERT INTO ARRANQUE(inicio, pos_final, color, carrera, caballo, jockey)
 	VALUES (2, 3, 'Café', 9, 114, NULL);
 
---TEST trigger 3
--- Ver resultados
-SELECT rfc, nombre, ganancias FROM DUENO;
-SELECT rfc, nombre, salario FROM ENTRENADOR;
-SELECT rfc, nombre, salario FROM JOCKEY;
-
-
 -- TEST trigger 2
 UPDATE CABALLO
 SET entrenador = (
@@ -356,3 +355,28 @@ SET entrenador = (
 )
 WHERE reg = 111;
 /
+
+--TEST trigger 3
+    -- Ver ganancias antes
+    SELECT rfc, nombre, ganancias FROM DUENO;
+    SELECT rfc, nombre, salario FROM ENTRENADOR;
+    SELECT rfc, nombre, salario FROM JOCKEY;
+    -- inserts
+    INSERT INTO CARRERA VALUES(5, 100, NULL, 'Carrera de salto');
+    INSERT INTO PROPIEDAD_DE VALUES(112, 'd1', 0.5);
+    INSERT INTO PROPIEDAD_DE VALUES(112, 'd2', 0.5);
+    UPDATE CABALLO
+    SET entrenador = (
+        SELECT REF(e)
+        FROM ENTRENADOR e
+        WHERE e.rfc = 'e3'
+    )
+    WHERE reg = 112;
+/
+    -- Arranque
+    INSERT INTO ARRANQUE VALUES(1, 1, 'Verde', 5, 112, NULL);
+    
+    -- Resultados
+    SELECT rfc, nombre, ganancias FROM DUENO;
+    SELECT rfc, nombre, salario FROM ENTRENADOR;
+    SELECT rfc, nombre, salario FROM JOCKEY;
