@@ -313,6 +313,23 @@ SET entrenador = (
 WHERE reg = 114;
 /
 
+--Test trigger 1
+--Input aceptado sin errores
+INSERT INTO CARRERA(
+	num_carrera, premio, fecha_carr, tipo)
+	VALUES (8, 2000, TO_DATE('17/12/2015', 'DD/MM/YYYY'), 'Carrera plana');
+	
+INSERT INTO ARRANQUE(inicio, pos_final, color, carrera, caballo, jockey)
+	VALUES (1, 3, 'Café', 8, 113, NULL);
+
+--Error: El tipo de caballo no coincide con el tipo de carrera
+INSERT INTO CARRERA(
+	num_carrera, premio, fecha_carr, tipo)
+	VALUES (9, 2000, TO_DATE('17/12/2015', 'DD/MM/YYYY'), 'Carrera plana');
+	
+INSERT INTO ARRANQUE(inicio, pos_final, color, carrera, caballo, jockey)
+	VALUES (2, 3, 'Café', 9, 114, NULL);
+
 --TEST trigger 3
 -- Ver resultados
 SELECT rfc, nombre, ganancias FROM DUENO;
